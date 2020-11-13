@@ -1,0 +1,123 @@
+---
+title: "p8105_hw5_ys3394"
+author: "Yifan Su"
+date: '`r format(Sys.time(), "%Y-%m-%d")`'
+output: github_document
+
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(rvest)
+set.seed(1)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 1
+
+* The raw data _Washington Post_ gatghered data mapping more than 52,000 homicides in major American cities over the past dacedes, and includes where murder is common but unsolved. 
+
+* In the dataset, it has `r nrow(read_csv("homicide_data/homicide-data.csv"))` rows and `r ncol(read_csv("homicide_data/homicide-data.csv"))` columns. Variables in the data include characteristics of victims such as race, age and sex. Also, there are variables specify murders, including city, state they occured, and the reported date.
+
+#### Summarize number of homicides within cities
+
+```{r tidy_df, collapse=TRUE, message=FALSE, warning=FALSE}
+# Read in the data
+homicide_df = 
+  read_csv("homicide_data/homicide-data.csv") %>% 
+  mutate(
+    city_state = str_c(city, state, sep = "_"),
+    resolved = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest"        ~ "unsolved",
+      disposition == "Closed by arrest"      ~ "solved",
+    )
+  ) %>% 
+  select(city_state, resolved) %>% 
+  filter(city_state != "Tulsa_AL") %>% 
+  group_by(city_state) %>% 
+  summarize(
+    hom_total = n(),
+    hom_unsolved = sum(resolved == "unsolved")
+  )
+```
+
+#### `prop.test` for city Baltimore
+
+```{r baltimore, collapse=TRUE, message=FALSE, warning=FALSE}
+baltimore_test =
+prop.test(
+  homicide_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_unsolved), 
+  homicide_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_total)) %>%
+  broom::tidy() %>% 
+  select(estimate, conf.low, conf.high)
+```
+
+#### `prop.test` for each of the cities
+
+```{r cities, collapse=TRUE, message=FALSE, warning=FALSE}
+results_df = 
+  homicide_df %>% 
+  mutate(
+    prop_tests = map2(.x = hom_unsolved, .y = hom_total, ~prop.test(x = .x, n = .y)),
+    tidy_tests = map(.x = prop_tests, ~broom::tidy(.x))
+  ) %>% 
+  select(-prop_tests) %>% 
+  unnest(tidy_tests) %>% 
+  select(city_state, estimate, conf.low, conf.high)
+```
+
+#### A plot showing estimates and CIs for each city
+
+```{r bar_plot, collapse=TRUE, message=FALSE, warning=FALSE}
+results_df %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(y = city_state, x = estimate)) +
+  geom_point() + 
+  geom_errorbar(aes(xmin = conf.low, xmax = conf.high)) +
+  labs(x = "Estimated proportion",
+       y = "City",
+       title = "Estimates and CIs for each city")
+```
+
+
+## Problem 2 ideas ...
+
+
+import one dataset 
+
+```{r}
+data_1 = read_csv("lda_data/con_01.csv")
+```
+
+```{r, error = TRUE}
+path_df = 
+  tibble(
+    path = list.files("lda_data"),
+  ) %>% 
+  mutate(
+    path = str_c("lda_data/", path),
+    data = map(.............))
+
+read_csv(path_df$path[[1]])
+```
+
+
+
