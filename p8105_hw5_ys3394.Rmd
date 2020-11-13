@@ -9,6 +9,7 @@ output: github_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(rvest)
+library(ggplot2)
 set.seed(1)
 
 knitr::opts_chunk$set(
@@ -114,10 +115,42 @@ path_df =
   ) %>% 
   mutate(
     path = str_c("lda_data/", path),
-    data = map(.............))
-
-read_csv(path_df$path[[1]])
+    data = map(.x = path, ~read_csv(.x)),
+    arm_id = str_remove(path, "lda_data/"),
+    arm_id = str_remove(arm_id, ".csv")) %>% 
+  unnest(data) %>% 
+  select(-path) %>% 
+  pivot_longer(
+    week_1:week_8,
+    values_to = "arm_data",
+    names_to = "week"
+  ) %>% 
+  separate(arm_id, into = c("arm", "id"), sep = "_")
+  
 ```
 
 
+
+```{r}
+plot_spaghetti =
+  path_df %>% 
+  unite("arm_id", arm:id, remove = FALSE) %>% 
+  ggplot(aes(x = week, y = arm_data, group = arm_id, color = arm)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Week",
+       y = "Measurement for two arms",
+       title = "Observations in two arms over 8 weeks")
+```
+
+
+## Problem 3
+
+```{r}
+n = 30
+mu = 5
+sigma = 5
+x = rnorm(n, mean = mu, sd = sigma)
+t.test(x, mu = mu, conf.level = 0.95)
+```
 
