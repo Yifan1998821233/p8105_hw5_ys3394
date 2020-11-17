@@ -100,12 +100,12 @@ results_df %>%
 ```
 
 
-## Problem 2 ideas ...
+## Problem 2 
 
+**A tidy dataframe containing data from all participants, including the subject ID, arm, and observations over time.**
 
-import one dataset 
-
-```{r collapse=TRUE, message=FALSE, warning=FALSE}
+```{r path_df, collapse=TRUE, message=FALSE, warning=FALSE}
+# Make a tidy dataframe combines all datasets
 path_df = 
   tibble(
     path = list.files("lda_data"),
@@ -123,16 +123,21 @@ path_df =
     names_to = "week"
   ) %>% 
   separate(arm_id, into = c("arm", "id"), sep = "_")
-  
+
+head(path_df)
 ```
 
+* In this step, I made `path_df` a tidy dataframe containging arms, subject ID and measurements. 
 
 
-```{r collapse=TRUE, message=FALSE, warning=FALSE}
+**Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.**
+
+```{r spaghetti, collapse=TRUE, message=FALSE, warning=FALSE}
+# Make a spaghetti plot 
 plot_spaghetti =
   path_df %>% 
   unite("arm_id", arm:id, remove = FALSE) %>% 
-  ggplot(aes(x = week, y = arm_data, group = arm_id, color = arm)) +
+  ggplot(aes(x = week, y = arm_data, group = arm_id, color = arm)) + # use group, or it recognize weeks as groups.
   geom_point() +
   geom_line() +
   labs(x = "Week",
@@ -142,10 +147,16 @@ plot_spaghetti =
 plot_spaghetti
 ```
 
+* In this plot, the measurement of two arms at the beginning is not that different, but the measurements for observations in the experimental arm increased over time. Meanwhile, the trend in the control arm is that measurements remain the same, and even decreased slightly.
 
 ## Problem 3
 
-```{r}
+### Generate 5000 datasets from the normality model, obtain the estimate and p-value.
+
+**First set n = 30, sigma = 5, mu = 0, and run the t-test once.**
+
+```{r test, collapse=TRUE, message=FALSE, warning=FALSE}
+# Run t-test for one time 
 n = 30
 mu = 5
 sigma = 5
@@ -153,8 +164,10 @@ x = rnorm(n, mean = mu, sd = sigma)
 t.test(x, mu = mu, conf.level = 0.95)
 ```
 
+**Write a function `sim_data`**
 
-```{r}
+```{r collapse=TRUE, message=FALSE, warning=FALSE}
+set.seed(100)
 sim_ttest = function(mu) {
   
   sim_data = 
@@ -164,17 +177,23 @@ sim_ttest = function(mu) {
   
   sim_data %>% 
     summarize(
-      mu_hat = mean(x),
-      t_test = t.test(x, mu = mu, conf.level = 0.95) %>% 
+        t_test = t.test(x, mu = 0, conf.level = 0.95) %>% 
         broom::tidy() %>% 
-        select(p.value)
-    )
+        select(p.value, estimate)
+    ) %>% 
+    mutate(p_value = t_test$p.value,
+           estimate = t_test$estimate) %>% 
+    select(p_value, estimate)
 }
 
+# use mu = 0 to test if the function works
 sim_ttest(0)
 ```
 
-```{r}
+**Repeat the above for μ={0,1,2,3,4,5,6}**
+
+```{r 5000_df, collapse=TRUE, message=FALSE, warning=FALSE}
+# repeat for mu = 0~6 5000 times
 set.seed(1000)
 sim_results = 
   tibble(mu = c(0, 1, 2, 3, 4, 5, 6)) %>% 
@@ -182,14 +201,13 @@ sim_results =
     output_lists = map(.x = mu, ~rerun(5000, sim_ttest(mu = .x))),# be very specific
     estimate_dfs = map(output_lists, bind_rows)) %>% 
   select(-output_lists) %>% 
-  unnest(estimate_dfs) %>% 
-  mutate(p_value = t_test$p.value) %>% 
-  select(mu, mu_hat, p_value)
-  
+  unnest(estimate_dfs)
 ```
 
+**A plot showing the proportion of times the null was rejected (power) versus the true value of mu**
 
-```{r}
+```{r power, collapse=TRUE, message=FALSE, warning=FALSE}
+# A plot showing the power
 set.seed(1000)
 plot_power = 
 sim_results %>% 
@@ -210,42 +228,54 @@ sim_results %>%
 plot_power
 ```
 
+* The association between effect size and power:<br/>
+The power is the proportion of rejected times when the null is false. Since the null is always mu = 0 when the true value of mu = {1, 2, 3, 4, 5, 6}, the power increases as the effect size increases, and nearly reaches 1 as true mu is 4.
 
-```{r}
+### Make two plots showing relationships between estimated mu and true value of mu.
+
+**A plot showing the average estimate of mu versus the true value of mu**
+
+```{r mu_df, collapse=TRUE, message=FALSE, warning=FALSE}
+# A plot showing the average estimate of mu
 plot_mu_hat = 
   sim_results %>% 
   group_by(mu) %>% 
-  summarize(mean_mu_hat = mean(mu_hat)) %>% 
-  ggplot(aes(x = mu, y = mean_mu_hat), color = mu) +
+  summarize(estimate_mu = mean(estimate)) %>% 
+  ggplot(aes(x = mu, y = estimate_mu), color = mu) +
   geom_point() +
   geom_line() +
   scale_x_continuous(limits = c(0,6), breaks = seq(0,6,1)) +
   labs(
-    title = "Mean of mu_hat and the tru value of mu",
+    title = "Estimated mu and the true value of mu",
     x = "True mu",
-    y = "Mean of mu_hat"
+    y = "Estimated mu"
   )
   
 ```
 
+**A second plot of the average estimate of mu in samples for which the null was rejected versus the true value of mu**
 
-```{r}
+```{r mu_rej, collapse=TRUE, message=FALSE, warning=FALSE}
+# A second plot of the average estimate of mu rejected
 plot_rej_mu_hat = 
   sim_results %>% 
   filter(p_value < 0.05) %>% 
   group_by(mu) %>% 
-  summarize(mean_rej_mu_hat = mean(mu_hat)) %>% 
-  ggplot(aes(x = mu, y = mean_rej_mu_hat ), color = mu) +
+  summarize(rej_estimate_mu = mean(estimate)) %>% 
+  ggplot(aes(x = mu, y = rej_estimate_mu ), color = mu) +
   geom_point() +
-  geom_path() +
+  geom_abline() +
   scale_x_continuous(limits = c(0,6), breaks = seq(0,6,1)) +
   labs(
-    title = "Mean of mu_hat rejected and the tru value of mu",
+    title = "Estimated mu rejected and the true value of mu",
     x = "True mu",
-    y = "Mean of mu_hat rejected"
+    y = "Estimated mu rejected"
   )
 
+# Combine two plots
 plot_mu_hat / plot_rej_mu_hat
-  
 ```
 
+* The sample average of mu among mu rejected is not approximately equal to the true value of mu when mu is 1 and 2, but the condition fits for mu equals to 3, 4, 5, and 6.
+
+* It is because that the proportion of rejected times (power) increases as mu increases when the truth that mu not equals to the null becomes obvious.
